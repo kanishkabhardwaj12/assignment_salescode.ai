@@ -1,0 +1,5 @@
+.venv/
+__pycache__/
+features_cache.npz
+data/
+.DS_Store

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spot the Fake Photo — live demo</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background: #111;
+         color: #eee; display: flex; flex-direction: column; align-items: center;
+         gap: 16px; padding: 24px; }
+  video { width: min(90vw, 560px); border-radius: 12px; background: #000; }
+  #bar { width: min(90vw, 560px); height: 26px; background: #333;
+         border-radius: 13px; overflow: hidden; }
+  #fill { height: 100%; width: 0%; background: #2e7d32; transition: all .3s; }
+  #verdict { font-size: 1.5rem; font-weight: 700; }
+  #score { color: #999; }
+  .screen { color: #ef5350; } .real { color: #66bb6a; }
+</style>
+</head>
+<body>
+  <h2>Spot the Fake Photo</h2>
+  <video id="cam" autoplay playsinline muted></video>
+  <div id="bar"><div id="fill"></div></div>
+  <div id="verdict">starting camera…</div>
+  <div id="score"></div>
+
+<script>
+const video = document.getElementById('cam');
+const fill = document.getElementById('fill');
+const verdict = document.getElementById('verdict');
+const scoreEl = document.getElementById('score');
+const canvas = document.createElement('canvas');
+
+async function start() {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'environment', width: { ideal: 1280 } }, audio: false
+  });
+  video.srcObject = stream;
+  video.onloadedmetadata = () => setInterval(tick, 700);
+}
+
+let busy = false;
+async function tick() {
+  if (busy || !video.videoWidth) return;
+  busy = true;
+  try {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
+    const res = await fetch('/predict', { method: 'POST', body: blob });
+    const { score, error } = await res.json();
+    if (error) { verdict.textContent = error; return; }
+    const pct = Math.round(score * 100);
+    fill.style.width = pct + '%';
+    fill.style.background = score > 0.5 ? '#c62828' : '#2e7d32';
+    verdict.textContent = score > 0.5 ? 'PHOTO OF A SCREEN' : 'REAL PHOTO';
+    verdict.className = score > 0.5 ? 'screen' : 'real';
+    scoreEl.textContent = 'score: ' + score.toFixed(2);
+  } catch (e) {
+    verdict.textContent = 'server unreachable';
+  } finally { busy = false; }
+}
+
+start().catch(e => verdict.textContent = 'camera blocked: ' + e.message);
+</script>
+</body>
+</html>
